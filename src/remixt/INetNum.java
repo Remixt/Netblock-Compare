@@ -6,8 +6,10 @@ public class INetNum {
     private String ipEndString;
 
     public INetNum(String ip){
-        ipStartString = ip.substring(16,30);
-        ipEndString = ip.substring(33);
+        String[] ips;
+        ips = ip.split(" - ");
+        ipStartString = ips[0];
+        ipEndString = ips[1];
     }
     public void printIP(){
         System.out.println("Start Ip: " + ipStartString + "\n" + "End Ip  : " + ipEndString);

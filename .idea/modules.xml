@@ -2,7 +2,11 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/Netblock.iml" filepath="$PROJECT_DIR$/Netblock.iml" />
+      <module fileurl="file://$PROJECT_DIR$/Netblock-Compare.iml" filepath="$PROJECT_DIR$/Netblock-Compare.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/libraries/libraries.iml" filepath="$PROJECT_DIR$/.idea/libraries/libraries.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/netblock.iml" filepath="$PROJECT_DIR$/.idea/modules/netblock.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/netblock_main.iml" filepath="$PROJECT_DIR$/.idea/modules/netblock_main.iml" group="netblock" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/netblock_test.iml" filepath="$PROJECT_DIR$/.idea/modules/netblock_test.iml" group="netblock" />
     </modules>
   </component>
 </project>
