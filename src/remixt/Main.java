@@ -28,53 +28,6 @@ package remixt;
     sj4j\slf4j-api-1.7.4.jar
     slf4j-simple-1.7.4.jar
     spark-sql_2.11-1.2.1.jar
-*
-* Expected Usage Example:
-*Please specify a database text file to open. ex: 'C:\Users\cbrant.intrusion\desktop\ripe.txt'
-
-:>C:\Users\cbrant.intrusion\desktop\ripe.txt
-Building map from database file. This will take several minutes... Please Wait...
-
-Source map built successfully!
-
-
-:>compare
-Database username: cbrant
-
-Database password: ******
-
-Jun 20, 2018 1:41:37 PM org.apache.hive.jdbc.Utils parseURL
-INFO: Supplied authorities: tbm1:10000
-Jun 20, 2018 1:41:37 PM org.apache.hive.jdbc.Utils parseURL
-INFO: Resolved authority: tbm1:10000
-Jun 20, 2018 1:41:37 PM org.apache.hive.jdbc.HiveConnection openTransport
-INFO: Will try to open client transport with JDBC Uri: jdbc:hive2://tbm1:10000
-Login Success!
-Please specify the source of your database file: ex: 'RIPE'
-:>ripe
-Running Query. This will take several minutes. Please Wait...
-Query Complete
-Running comparison, please wait...
----------------------------------------
-Missing from Tracecop: 68208
-Missing fromRIPE: 48706
----------------------------------------
-File saved: C:\Users\cbrant.INTRUSION\IdeaProjects\Netblock-Compare\ripe_miss_from_trace_180620_134537.csv
-File saved: C:\Users\cbrant.INTRUSION\IdeaProjects\Netblock-Compare\trace_miss_from_ripe_180620_134537.csv
-
-
-:>help
-Usage:
- 'help' - displays this menu.
- 'search' - search the current database map for a specific ip.
- 'save' - saves the current database map ip range to a .csv file.
- 'compare' - compares the current database map ip range to the tracecop database.
- 'exit' - closes the program.
- 'new' - creates a new ip range database map from a new file.
-
-:>exit
-
-Process finished with exit code 0
 */
 
 import java.io.*;
@@ -93,14 +46,15 @@ public class Main {
     private static String username = null; // credentials for hive database
     private static String password = null; // ^
     private static String source = null; // stores the name of the database source ex: RIPE
+    private static String[] ips;
     private static Scanner keys; // takes input from keyboard
 
     private static Map<String, String> sourceMap; // stores the start ip as the key for each netblock data structure.
     private static Map<String, String> traceMap; // stores the start ip as the key for each netblock data structure.
 
 
-    private static void runHiveQuery() throws SQLException, IOException{
-        if(username == null|| password == null) {
+    private static void runHiveQuery() throws SQLException, IOException {
+        if (username == null || password == null) {
             System.out.print("Database username: ");
             username = keys.nextLine();
             System.out.println();
@@ -113,41 +67,9 @@ public class Main {
             // class file for connecting to the hive database
             HiveJdbcClient hivedb = new HiveJdbcClient(username, password);
             System.out.println("Login Success!");
-            System.out.println("Please specify the source of your database file: ex: 'RIPE'");
-            source = ""; // re-initialize source to ensure the user can reselect a new one if needed.
-            while(source.equals("")) {
-                System.out.print(":>");
-                command = keys.nextLine().toUpperCase();
-                switch (command) {
-                    case "HELP":
-                        System.out.println("Available sources: 'RIPE' 'ARIN' 'LACNIC' 'AFRINIC' 'APNIC'");
-                        break;
-                    case "RIPE":
-                        source = "RIPE";
-                        break;
-                    case "ARIN":
-                        source = "ARIN";
-                        break;
-                    case "LACNIC":
-                        source = "LACNIC";
-                        break;
-                    case "AFRINIC":
-                        source = "AFRINIC";
-                        break;
-                    case "APNIC":
-                        source = "APNIC";
-                        break;
-                    case "EXIT":
-                        System.exit(0);
-                    default:
-                        System.out.println("Please specify a valid source. To list possible sources type 'help'");
-                        break;
-                }
-            }
             System.out.println("Running Query. This will take several minutes. Please Wait...");
-            res = hivedb.getQueryResult("select sta.ip2str(netblock.startipnumber), sta.ip2str(netblock.endipnumber) from netblock where version = 4 and lookupsourcelabel = '" + source + "'");
-        }
-        catch(Exception e) {
+            res = hivedb.getQueryResult("select distinct sta.ip2str(netblock.startipnumber), sta.ip2str(netblock.endipnumber) from netblock where version =4 and lower(lookupsourcelabel) like '%" + source.toLowerCase() + "%'");
+        } catch (Exception e) {
             System.out.println("Missing or incorrect parameters");
             username = null;
             password = null;
@@ -158,14 +80,14 @@ public class Main {
         String endIP;
 
         traceMap = new HashMap<>();
-                    while(res.next()) {
+        while (res.next()) {
 
-                        res.next(); // temporary fix because database has three of every address for some reason... This skips one line.
-                        res.next(); // ^
+            //res.next(); // temporary fix because database has three of every address for some reason... This skips one line.
+           // res.next(); // ^
 
-                        startIP = res.getString(1);
-                        endIP = res.getString(2);
-                        traceMap.put(startIP,endIP);
+            startIP = res.getString(1);
+            endIP = res.getString(2);
+            traceMap.put(startIP, endIP);
 
 
         }
@@ -173,7 +95,7 @@ public class Main {
         compareSourceToTracecop();
     }
 
-    private static void saveSourceMap(){
+    private static void saveSourceMap() throws IOException, SQLException {
         System.out.println("Please enter a file name, do NOT include the extension, it will be a csv file.");
         command = keys.next() + ".csv";
         try {
@@ -185,23 +107,25 @@ public class Main {
             writer.flush();
             writer.close();
             System.out.println("File saved: " + new File(command).getAbsolutePath());
-        }catch(Exception e){
+        } catch (Exception e) {
             System.out.println("Error while saving file: ");
             e.printStackTrace();
+            mainMenu();
         }
+        mainMenu();
     }
 
-    private static void saveResults(Set<String> results, Map<String,String> mapsource, String filename) throws IOException{
+    private static void saveResults(Map<String, String> mapsource, String filename) throws IOException, SQLException {
         // save the results found in the compareSourceToTracecop method to a csv comma delimited file.
         PrintWriter writer = new PrintWriter(filename + ".csv");
         writer.print("start");
         writer.print(",");
         writer.print("end");
         writer.println();
-        for(String s: results){
-            writer.print(s);
+        for (Map.Entry<String,String> entry : mapsource.entrySet()){
+            writer.print(entry.getKey());
             writer.print(",");
-            writer.print(mapsource.get(s));
+            writer.print(entry.getValue());
             writer.println();
         }
         writer.println();
@@ -210,27 +134,45 @@ public class Main {
         System.out.println("File saved: " + new File(filename + ".csv").getAbsolutePath());
     }
 
-    private static void searchSourceMap(){
-        System.out.println("Please Enter an IP address to search for: > ");
+    private static void searchSourceMap() throws IOException, SQLException {
+        System.out.println("Please Enter an IP address to search for... Ex: '192.168.0.1'. You can type 'back' to go back to the main menu. ");
         command = keys.nextLine();
-        while(command.length() < 8){
-            System.out.println("Please Enter a Valid IP Address: I.E. '192.168.0.1'");
-            command = keys.nextLine();
+        switch (command) {
+            case "back":
+                mainMenu();
+                break;
+            case "exit":
+                System.exit(0);
+                break;
+            case "help":
+                System.out.println("Commands available: back, exit, help.");
+                break;
+            default:
+                break;
         }
+
         if (sourceMap.containsKey(command)) {
-            System.out.println("Found start address in the database! ");
+            System.out.println("Found: ");
             System.out.println(sourceMap.get(command));
+            System.out.println();
+            searchSourceMap();
         } else {
             System.out.print("Nothing found, sorry!");
+            searchSourceMap();
         }
     }
 
-    private static void buildSourceMap() throws IOException {
+    private static void buildSourceMap() throws IOException, SQLException {
         // initialize a new map for storing the ip data.
         sourceMap = new HashMap<>();
+        String IPADDRESS_PATTERN;
+        Pattern pattern;
+        boolean isMatch;
+        String line;
+
 
         // prompt the user for the source database file (usually downloaded as a .db file with ~5gb in size)
-        System.out.println("Please specify a database text file to open. ex: 'C:\\Users\\cbrant.intrusion\\desktop\\ripe.txt' ");
+        System.out.println("Please specify a database text file to open. ex: C:\\Users\\cbrant.INTRUSION\\IdeaProjects\\Netblock-Compare\\files\\lacnic.txt ");
         // give the user unlimited attempts to give a correct file location...
         // buffered reader for parsing data from file
         BufferedReader bReader;
@@ -248,37 +190,92 @@ public class Main {
             }
         }
 
+        System.out.println("Please specify the source name. ex: 'RIPE'");
+        source = ""; // re-initialize source to ensure the user can reselect a new one if needed.
+        while (source.equals("")) {
+            System.out.print(":>");
+            command = keys.nextLine().toUpperCase();
+            switch (command) {
+                case "HELP":
+                    System.out.println("Available sources: 'RIPE' 'ARIN' 'LACNIC' 'AFRINIC' 'APNIC'");
+                    break;
+                case "RIPE":
+                    source = "RIPE";
+                    break;
+                case "ARIN":
+                    source = "ARIN";
+                    break;
+                case "LACNIC":
+                    source = "LACNIC";
+                    break;
+                case "AFRINIC":
+                    source = "AFRINIC";
+                    break;
+                case "APNIC":
+                    source = "APNIC";
+                    break;
+                case "EXIT":
+                    System.exit(0);
+                default:
+                    System.out.println("Please specify a valid source name. To list possible sources type 'help'");
+                    break;
+            }
+        }
+
         // prompt the user that the file read was successful and begin processing the file.
         System.out.println("Building map from database file. This will take several minutes. Please Wait... \n");
 
-
-        //Regex pattern that will match an ip range in the form: 0.0.0.0 - 0.0.0.0 where any 0 can be replaced with an integer from 1 to 255
-        String IPADDRESS_PATTERN = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?) - (?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
-        Pattern pattern = Pattern.compile(IPADDRESS_PATTERN);
-        boolean isMatch;
-        String line;
-
-        // read each line and use the regex pattern to determine if the line has an ip range
-        while ((line = bReader.readLine()) != null) {
-            Matcher matcher = pattern.matcher(line);
-            isMatch = matcher.find();
-            if (isMatch) {
-                // custom class for storing start/end ip for a given netblock
-                INetNum netNum = new INetNum(matcher.group(0));
-                sourceMap.put(netNum.getIpStartString(), netNum.getIpEndString());
+        if (source.equals("ARIN") || source.equals("LACNIC") || source.equals("AFRINIC") || source.equals("APNIC") ||source.equals("RIPE") ) {
+            IPADDRESS_PATTERN = "((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))[|]([\\d]*)[|]";
+            pattern = Pattern.compile(IPADDRESS_PATTERN);
+            // read each line and use the regex pattern to determine if the line has an ip range
+            while ((line = bReader.readLine()) != null) {
+                Matcher matcher = pattern.matcher(line);
+                isMatch = matcher.find();
+                if (isMatch) {
+                    INetNum nn = new INetNum(matcher.group(1), Integer.parseInt(matcher.group(2)));
+                    sourceMap.put(nn.getIpStartString(), nn.getIpEndString());
+                }
             }
-        }
-        bReader.close();
-        if (sourceMap.isEmpty()) {
-            System.out.println("Error: Unable to read any usable data in file.");
-            System.exit(1);
-        }
+            bReader.close();
+            if (sourceMap.isEmpty()) {
+                System.out.println("Error: Unable to read any usable data in file.");
+                System.exit(1);
+            }
 
-        // prompt the user when done
-        System.out.println("Source map built successfully! Type 'compare' to continue or 'help' for other options...\n");
+            // prompt the user when done
+            System.out.println("Source map built successfully! Type 'compare' to continue or 'help' for other options...\n");
+            mainMenu();
+
+        } else {
+
+            //Regex pattern that will match an ip range in the form: 0.0.0.0 - 0.0.0.0 where any 0 can be replaced with an integer from 1 to 255
+
+            IPADDRESS_PATTERN = "(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?) - (?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)";
+            pattern = Pattern.compile(IPADDRESS_PATTERN);
+
+            // read each line and use the regex pattern to determine if the line has an ip range
+            while ((line = bReader.readLine()) != null) {
+                Matcher matcher = pattern.matcher(line);
+                isMatch = matcher.find();
+                if (isMatch) {
+                    ips = matcher.group(0).split(" - "); // split the start and end address into the ips array, remove the dash and space characters from the strings.
+                    sourceMap.put(ips[0], ips[1]); // insert the start ip address as the key and the end ip address as the associated string with that key.
+                }
+            }
+            bReader.close();
+            if (sourceMap.isEmpty()) {
+                System.out.println("Error: Unable to read any usable data in file.");
+                System.exit(1);
+            }
+
+            // prompt the user when done
+            System.out.println("Source map built successfully! Type 'compare' to continue or 'help' for other options...\n");
+            mainMenu();
+        }
     }
 
-    private static void compareSourceToTracecop() throws IOException{
+    private static void compareSourceToTracecop() throws IOException, SQLException {
 
         /*
         This looks confusing, but its pretty simple.
@@ -287,76 +284,96 @@ public class Main {
         3. Remove the keys from tracecop that also exist in the source. - this leaves a set that contains data found only tracecop.
         4. Repeat this but inversely to get the data contained in the source that is missing from tracecop.
         */
-
+        System.out.println("---------------------------------------");
         System.out.println("Running comparison, please wait...");
 
-        Set<String> keysInTrace = new HashSet<>(traceMap.keySet()); // 1.
-        Set<String> inTraceNotSource = new HashSet<>(keysInTrace); // 1.
 
-        Set<String> keysInSource = new HashSet<>(sourceMap.keySet()); // 2.
-        Set<String> inSourceNotTrace = new HashSet<>(keysInSource); // 2.
+        Map<String,String> missingTraceMap = new HashMap<>();
+        Map<String,String> missingSourceMap = new HashMap<>();
 
-        inTraceNotSource.removeAll(keysInSource); // 3.
-        inSourceNotTrace.removeAll(keysInTrace); // 4.
+        System.out.println("---------------------------------------");
+        System.out.println("Size of " + source + ": " + sourceMap.size());
+        System.out.println("Size of tracecop: " + traceMap.size());
+        System.out.println("---------------------------------------");
 
+        for (Map.Entry<String,String> entry : sourceMap.entrySet()){
+            if(traceMap.containsKey(entry.getKey())){
+                if(!entry.getValue().equalsIgnoreCase(traceMap.get(entry.getKey()))){
+                    missingTraceMap.put(entry.getKey(),entry.getValue());
+                }
+            }else {missingTraceMap.put(entry.getKey(),entry.getValue());}
+        }
+
+        for (Map.Entry<String,String> entry : traceMap.entrySet()){
+            if(sourceMap.containsKey(entry.getKey())){
+                if(!entry.getValue().equalsIgnoreCase(sourceMap.get(entry.getKey()))){
+                    missingSourceMap.put(entry.getKey(),entry.getValue());
+                }
+            }else {missingSourceMap.put(entry.getKey(),entry.getValue());}
+        }
 
         // Save the results to a csv file
         System.out.println("---------------------------------------");
-        System.out.println("Missing from Tracecop: " + inSourceNotTrace.size());
-        System.out.println("Missing from " + source + ": " + inTraceNotSource.size());
+        System.out.println("Missing from Tracecop: " + missingTraceMap.size());
+        System.out.println("Missing from " + source + ": " + missingSourceMap.size());
         System.out.println("---------------------------------------");
 
         // get date and time for unique file name
-        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyMMdd_HHmmss");
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyMMdd_HHmm");
         LocalDateTime now = LocalDateTime.now();
 
-        saveResults(inSourceNotTrace, sourceMap,source.toLowerCase() +"_miss_from_trace_"+dtf.format(now));
-        saveResults(inTraceNotSource, traceMap,"trace_miss_from_"+ source.toLowerCase()+"_"+dtf.format(now));
+       saveResults(missingTraceMap, source.toLowerCase() + "_miss_from_trace_" + dtf.format(now));
+        saveResults(missingSourceMap, "trace_miss_from_" + source.toLowerCase() + "_" + dtf.format(now));
+        mainMenu();
     }
 
-    public static void main(String[] args) throws IOException, SQLException{
+    private static void mainMenu() throws IOException, SQLException {
+
+        while (true) {
+
+            System.out.print("\n:>");
+            command = keys.nextLine().toLowerCase();
+
+            switch (command) {
+                case "help":
+                    System.out.println("Usage:" +
+                            "\n 'help' - displays this menu." +
+                            "\n 'search' - search the current database map for a specific ip." +
+                            "\n 'save' - saves the current database map ip range to a .csv file." +
+                            "\n 'compare' - compares the current database map ip range to the tracecop database." +
+                            "\n 'exit' - closes the program." +
+                            "\n 'new' - creates a new ip range database map from a new file.");
+                    break;
+                case "search":
+                    searchSourceMap();
+                    break;
+                case "save":
+                    saveSourceMap();
+                    break;
+                case "compare":
+                    runHiveQuery();
+                    break;
+                case "exit":
+                    System.exit(0);
+                    break;
+                case "new":
+                    buildSourceMap();
+                    break;
+                default:
+                    System.out.println("Usage: 'help', 'search', 'save', 'compare', 'new', 'exit'");
+                    break;
+            }
+        }
+    }
+
+    public static void main(String[] args) throws IOException, SQLException {
         if (args.length < 2) {
 
             keys = new Scanner(System.in);
             buildSourceMap();
 
-            while (true) {
 
-                System.out.print("\n:>");
-                command = keys.nextLine().toLowerCase();
-
-                switch(command){
-                    case "help":
-                        System.out.println("Usage:" +
-                                "\n 'help' - displays this menu." +
-                                "\n 'search' - search the current database map for a specific ip." +
-                                "\n 'save' - saves the current database map ip range to a .csv file." +
-                                "\n 'compare' - compares the current database map ip range to the tracecop database." +
-                                "\n 'exit' - closes the program." +
-                                "\n 'new' - creates a new ip range database map from a new file.");
-                        break;
-                    case "search":
-                        searchSourceMap();
-                        break;
-                    case "save":
-                        saveSourceMap();
-                        break;
-                    case "compare":
-                        runHiveQuery();
-                        break;
-                    case "exit":
-                        System.exit(0);
-                        break;
-                    case "new:":
-                        buildSourceMap();
-                        break;
-                    default:
-                        System.out.println("Usage: 'help', 'search', 'save', 'compare', 'exit'");
-                        break;
-                }
-            }
-
-        }else{
+        } else {
             System.out.println("Sorry, command line arguments not yet implemented...");
             System.exit(0);
         }

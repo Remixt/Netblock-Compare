@@ -2,7 +2,9 @@ package remixt;
 
 import java.sql.*;
 
+
 public class HiveJdbcClient {
+String b = new StringBuilder("hi").reverse().toString();
     private static String driverName = "org.apache.hive.jdbc.HiveDriver";
     private Connection con;
     private Statement stmt;
